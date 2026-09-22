@@ -96,7 +96,7 @@ class HybridServer(SyncServer):
         self.latest_cloud_eta_scaled = 1.0
                                                                       
         best_acc_so_far = -float('inf')
-        best_test_loss_so_far = float('inf')
+        best_val_loss_so_far = float('inf')
         best_t_so_far = 0.0
         best_total_comm_size_so_far = 0.0
         best_round_so_far = 0
@@ -174,21 +174,13 @@ class HybridServer(SyncServer):
             self.async_save_model(self.model, saved_model_path, T_cur)
 
                                         
-            if self.config.clients.do_test:                                            
-                _ = [client.test(self.model) for client in self.clients]
-                reports = self.reporting(self.clients)
-                test_loss, accuracy = self.accuracy_averaging(reports)
-            else:                                
-                testset = self.loader.get_testset()
-                batch_size = self.config.fl.batch_size
-                testloader = fl_model.get_testloader(testset, batch_size)
-                test_loss, accuracy = fl_model.test(self.model, testloader)
+            val_loss, val_accuracy = self._evaluate_global_split('val')
 
             logging.info(
-                'Test loss: {} Average accuracy: {:.2f}%'.format(
-                    test_loss, 100 * accuracy
+                'Validation loss: {} Validation accuracy: {:.2f}%'.format(
+                    val_loss, 100 * val_accuracy
                 ))
-            if float(accuracy) >= 0.9:
+            if float(val_accuracy) >= 0.9:
                 logging.info(
                     'comm={:.3f}'.format(float(self.total_comm_size) / 1000.0)
                 )
@@ -199,7 +191,7 @@ class HybridServer(SyncServer):
                 if updater is None:
                     continue
                 try:
-                    updater(test_loss, round)
+                    updater(val_loss, round)
                 except Exception as exc:                                
                     logging.warning(
                         'Push global loss feedback failed: gw=%s round=%s err=%s',
@@ -209,12 +201,12 @@ class HybridServer(SyncServer):
                                                                                         
             improve_eps = 1e-12
             if is_hpwren:
-                is_best_checkpoint = bool(float(test_loss) < (best_test_loss_so_far - improve_eps))
+                is_best_checkpoint = bool(float(val_loss) < (best_val_loss_so_far - improve_eps))
             else:
-                is_best_checkpoint = bool(float(accuracy) > (best_acc_so_far + improve_eps))
+                is_best_checkpoint = bool(float(val_accuracy) > (best_acc_so_far + improve_eps))
             if is_best_checkpoint:
-                best_acc_so_far = float(accuracy)
-                best_test_loss_so_far = float(test_loss)
+                best_acc_so_far = float(val_accuracy)
+                best_val_loss_so_far = float(val_loss)
                 best_t_so_far = float(T_cur)
                 best_total_comm_size_so_far = float(self.total_comm_size)
                 best_round_so_far = int(round)
@@ -228,7 +220,7 @@ class HybridServer(SyncServer):
                         "best_round": int(best_round_so_far),
                         "best_t": float(best_t_so_far),
                         "best_acc": float(best_acc_so_far),
-                        "best_test_loss": float(best_test_loss_so_far),
+                        "best_val_loss": float(best_val_loss_so_far),
                         "best_total_comm_size": float(best_total_comm_size_so_far),
                         "target_accuracy": float(target_accuracy) if target_accuracy is not None else None
                     }
@@ -239,7 +231,7 @@ class HybridServer(SyncServer):
                         best_round_so_far,
                         best_t_so_far,
                         best_acc_so_far,
-                        best_test_loss_so_far,
+                        best_val_loss_so_far,
                         best_total_comm_size_so_far / 1000.0
                     )
                 else:
@@ -248,15 +240,15 @@ class HybridServer(SyncServer):
                         best_round_so_far,
                         best_t_so_far,
                         best_acc_so_far,
-                        best_test_loss_so_far
+                        best_val_loss_so_far
                     )
 
             display_time = self._display_time(T_cur, run_wall_start)
 
                                 
             if logger is not None:
-                logger.log_value('test_loss', test_loss, int(display_time * 1000))
-                logger.log_value('accuracy', accuracy, int(display_time * 1000))
+                logger.log_value('val_loss', val_loss, int(display_time * 1000))
+                logger.log_value('val_accuracy', val_accuracy, int(display_time * 1000))
 
                            
             prefetch_total = int(np.sum([gateway.prefetch_total for gateway in self.gateways]))
@@ -275,8 +267,8 @@ class HybridServer(SyncServer):
             quality_guard_trigger_count = int(
                 getattr(select_gateway, 'quality_guard_trigger_count', 0) or 0
             )
-            self.records.append_record(t=display_time, test_loss=test_loss,
-                                       acc=accuracy,
+            self.records.append_record(t=display_time, val_loss=val_loss,
+                                       val_acc=val_accuracy,
                                        cloud_ca_time=self.ca.asso_time,
                                        wall_clock_s=float(time.time() - run_wall_start),
                                        cloud_staleness=self.latest_cloud_staleness,
@@ -293,7 +285,7 @@ class HybridServer(SyncServer):
                                        quality_guard_trigger_count=quality_guard_trigger_count,
                                        is_best_checkpoint=int(is_best_checkpoint),
                                        best_acc_so_far=float(best_acc_so_far),
-                                       best_test_loss_so_far=float(best_test_loss_so_far),
+                                       best_val_loss_so_far=float(best_val_loss_so_far),
                                        best_t_so_far=float(best_t_so_far),
                                        best_total_comm_size_so_far=float(best_total_comm_size_so_far),
                                        best_round_so_far=int(best_round_so_far),
@@ -311,11 +303,11 @@ class HybridServer(SyncServer):
                                                     
             if model != 'HPWREN' and target_accuracy and\
                     (self.records.get_latest_acc() >= target_accuracy):
-                logging.info('Target accuracy reached.')
+                logging.info('Target validation accuracy reached.')
                 break
             elif model == 'HPWREN' and target_accuracy and\
                     (self.records.get_latest_acc() <= target_accuracy):
-                logging.info('Target MSE reached.')
+                logging.info('Target validation MSE reached.')
                 break
 
                                                
@@ -352,6 +344,11 @@ class HybridServer(SyncServer):
                                                                    
 
                                            
+        best_path = os.path.join(self.config.paths.saved_model, 'global_best')
+        if os.path.isfile(best_path):
+            self.model.load_state_dict(torch.load(best_path))
+            logging.info('Loaded validation-selected checkpoint for final test: %s', best_path)
+        self._log_final_test(logger, self._display_time(T_cur, run_wall_start) * 1000)
         saved_model_path = self.config.paths.saved_model
         self.rm_old_models(saved_model_path, T_cur + 1.0)
 

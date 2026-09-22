@@ -207,6 +207,7 @@ class LEAFLoader(object):
                                  
         self.config = config
         self.trainset = generator.trainset
+        self.valset = generator.valset
         self.testset = generator.testset
         self.labels = generator.labels
         if config.loader == 'leaf':
@@ -219,11 +220,18 @@ class LEAFLoader(object):
         return self.trainset['user_data'][user_name], self.testset['user_data'][user_name]
 
     def get_testset(self):
-                                                                        
-                                                                               
+        """Return only the final independent test set."""
         testset = {'x': [], 'y': []}
         for user in self.testset['users']:
             testset['x'] += self.testset['user_data'][user]['x']
             testset['y'] += self.testset['user_data'][user]['y']
                                                        
         return testset
+
+    def get_valset(self):
+        """Return only the global validation set; never fall back to test."""
+        valset = {'x': [], 'y': []}
+        for user in self.valset['users']:
+            valset['x'] += self.valset['user_data'][user]['x']
+            valset['y'] += self.valset['user_data'][user]['y']
+        return valset

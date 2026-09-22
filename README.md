@@ -86,7 +86,37 @@ Default path used by this repository:
 
 ### Optional Utility: `scripts/data/build_ave_dataset.py`
 
-This utility converts raw AVE videos plus official split files into the repository-ready multimodal format (`images/`, `audio/`, `texts/`, `index.json`) by extracting one representative frame, one audio segment, and one text record per sample.
+This utility converts raw AVE videos plus official split files into the repository-ready multimodal format (`images/`, `audio/`, `texts/`, `index.json`). The text modality is a label-independent natural-language caption generated from the representative frame only:
+
+```text
+AVE video
+  -> ffmpeg representative frame
+  -> VLM generates a natural-language caption from the frame only
+  -> CLIP encodes image and text
+
+AVE video
+  -> ffmpeg audio segment
+  -> CLAP encodes audio
+```
+
+Caption generation does not receive a class name, label, event category, ground-truth annotation, filename, or metadata. Captions can be supplied from an existing frame-caption file:
+
+```bash
+python scripts/data/build_ave_dataset.py \
+  --captions-json ./captions_from_frames.json
+```
+
+or generated through an OpenAI-compatible VLM endpoint:
+
+```bash
+export VLM_API_KEY="..."
+python scripts/data/build_ave_dataset.py \
+  --vlm-api-url <endpoint> \
+  --vlm-model <vision-model> \
+  --vlm-api-key-env VLM_API_KEY
+```
+
+There is no label-derived caption fallback.
 
 For reproducibility of the reported results, you can directly use the processed AVE release from the link above. In that case, you do **not** need to run this utility.
 
@@ -162,9 +192,12 @@ Expected output:
 ```text
 data/ave_fed/noniid_a1p0_c36_pt_fast/
 |- train.json
+|- val.json
 |- test.json
 `- meta.json
 ```
+
+The official AVE train, validation, and test splits are preserved separately. Validation data are used for online scheduling and model-selection feedback; final test data are never used for ToT branch selection or Dynamic Top-k feedback.
 
 For sensitivity experiments, note that:
 The modality-missing experiments in this repository are conducted as controlled feature-level simulations on pre-extracted multimodal representations. Specifically, the `--missing_image`, `--missing_audio`, and `--missing_text` settings are applied in the pre-extracted feature space. These experiments are intended to evaluate the robustness of the proposed scheduling and aggregation mechanisms under representation-level modality missingness, rather than to reproduce end-to-end sensor acquisition failures, transmission corruption, or encoder-level abnormalities.
@@ -191,6 +224,12 @@ python scripts/experiments/ave/main8/noniid_a1p0_c36_t6/run_ave_main8.py \
 ```
 
 This command requires ToTs API configuration; see Section 7.
+
+### Implementation clarification: ToT branch evaluation
+
+For each valid ToT candidate branch, the implementation independently selects clients, performs real local training and edge FedAvg from the same gateway base model, and evaluates the resulting branch model on the validation set. The resulting validation accuracy is the empirical reward for that branch. Proxy rewards are used only for preliminary candidate assessment and do not replace empirical branch rewards.
+
+The final test set is evaluated only after training and is not fed back into ToT pruning, client scheduling, Dynamic Top-k, early stopping, or checkpoint selection.
 
 ### Default Hyperparameters (Main AVE Runs)
 
@@ -324,7 +363,6 @@ Partition generation common issues:
 - **Citation**: A BibTeX entry will be added after the manuscript becomes publicly available.
 - **License**: MIT License. See the `LICENSE` file in the repository root.
 - **Contact**: open an issue in this repository or contact the corresponding authors listed in the manuscript.
-
 
 
 

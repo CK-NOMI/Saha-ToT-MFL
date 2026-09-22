@@ -20,7 +20,7 @@ class Record(object):
             "quality_guard_trigger_count": 0,
             "is_best_checkpoint": 0,
             "best_acc_so_far": 0.0,
-            "best_test_loss_so_far": 0.0,
+            "best_val_loss_so_far": 0.0,
             "best_t_so_far": 0.0,
             "best_total_comm_size_so_far": 0.0,
             "best_round_so_far": 0,
@@ -56,6 +56,8 @@ class Record(object):
         return self.record["t"][-1]
 
     def get_latest_acc(self):
+        if "val_acc" in self.record:
+            return self.record["val_acc"][-1]
         return self.record["acc"][-1]
 
     def save_record(self, filelabel):

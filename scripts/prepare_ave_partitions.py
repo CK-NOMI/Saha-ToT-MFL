@@ -276,6 +276,7 @@ def main():
         text_zero = np.zeros((args.text_bins,), dtype=np.float32)
 
     samples_train = []
+    samples_val = []
     samples_test = []
 
     prepared = []
@@ -339,7 +340,9 @@ def main():
                 }
                 if meta["split"] == "train":
                     samples_train.append(item)
-                elif meta["split"] in ("val", "test"):
+                elif meta["split"] == "val":
+                    samples_val.append(item)
+                elif meta["split"] == "test":
                     samples_test.append(item)
 
             if ((start // step) % 20 == 0) or (end == total):
@@ -368,36 +371,47 @@ def main():
             }
             if meta["split"] == "train":
                 samples_train.append(item)
-            elif meta["split"] in ("val", "test"):
+            elif meta["split"] == "val":
+                samples_val.append(item)
+            elif meta["split"] == "test":
                 samples_test.append(item)
 
     users = ["user_{:04d}".format(i) for i in range(args.clients)]
     if args.mode == "iid":
         train_partitions = partition_iid(samples_train, args.clients, rng)
+        val_partitions = partition_iid(samples_val, args.clients, rng)
         test_partitions = partition_iid(samples_test, args.clients, rng)
     else:
         train_partitions = partition_dirichlet(samples_train, args.clients, args.dirichlet_alpha, rng)
+        val_partitions = partition_dirichlet(samples_val, args.clients, args.dirichlet_alpha, rng)
         test_partitions = partition_dirichlet(samples_test, args.clients, args.dirichlet_alpha, rng)
 
     train_payload = make_leaf_payload(users, samples_train, train_partitions)
+    val_payload = make_leaf_payload(users, samples_val, val_partitions)
     test_payload = make_leaf_payload(users, samples_test, test_partitions)
 
     out_path = build_output_dir(args)
     os.makedirs(out_path, exist_ok=True)
     train_file = os.path.join(out_path, "train.json")
+    val_file = os.path.join(out_path, "val.json")
     test_file = os.path.join(out_path, "test.json")
     meta_file = os.path.join(out_path, "meta.json")
 
     with open(train_file, "w", encoding="utf-8") as f:
         json.dump(train_payload, f, ensure_ascii=False)
+    with open(val_file, "w", encoding="utf-8") as f:
+        json.dump(val_payload, f, ensure_ascii=False)
     with open(test_file, "w", encoding="utf-8") as f:
         json.dump(test_payload, f, ensure_ascii=False)
 
     train_counts = train_payload["num_samples"]
+    val_counts = val_payload["num_samples"]
     test_counts = test_payload["num_samples"]
     feature_dim = 0
     if len(samples_train) > 0:
         feature_dim = int(len(samples_train[0]["x"]))
+    elif len(samples_val) > 0:
+        feature_dim = int(len(samples_val[0]["x"]))
     elif len(samples_test) > 0:
         feature_dim = int(len(samples_test[0]["x"]))
     elif args.feature_backend == "pretrained":
@@ -414,9 +428,12 @@ def main():
         "feature_dim": feature_dim,
         "num_classes": len(sorted(list(set([int(x["label"]) for x in samples_train])))),
         "train_samples": len(samples_train),
+        "val_samples": len(samples_val),
         "test_samples": len(samples_test),
         "train_min_per_client": int(min(train_counts)) if len(train_counts) > 0 else 0,
         "train_max_per_client": int(max(train_counts)) if len(train_counts) > 0 else 0,
+        "val_min_per_client": int(min(val_counts)) if len(val_counts) > 0 else 0,
+        "val_max_per_client": int(max(val_counts)) if len(val_counts) > 0 else 0,
         "test_min_per_client": int(min(test_counts)) if len(test_counts) > 0 else 0,
         "test_max_per_client": int(max(test_counts)) if len(test_counts) > 0 else 0,
         "missing_apply_to": args.missing_apply_to,
@@ -436,15 +453,15 @@ def main():
     print("AVE_PREP_OK=1")
     print("OUT_DIR={}".format(out_path))
     print("TRAIN_JSON={}".format(train_file))
+    print("VAL_JSON={}".format(val_file))
     print("TEST_JSON={}".format(test_file))
     print("META_JSON={}".format(meta_file))
     print(
-        "SUMMARY mode={} clients={} train={} test={} feature_dim={} classes={}".format(
-            args.mode, args.clients, len(samples_train), len(samples_test), feature_dim, meta["num_classes"]
+        "SUMMARY mode={} clients={} train={} val={} test={} feature_dim={} classes={}".format(
+            args.mode, args.clients, len(samples_train), len(samples_val), len(samples_test), feature_dim, meta["num_classes"]
         )
     )
 
 
 if __name__ == "__main__":
     main()
-

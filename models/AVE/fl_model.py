@@ -33,6 +33,7 @@ class Generator(load_data.Generator):
         global FEATURE_DIM, NUM_CLASSES
 
         self.trainset = {"users": [], "user_data": {}, "num_samples": []}
+        self.valset = {"users": [], "user_data": {}, "num_samples": []}
         self.testset = {"users": [], "user_data": {}, "num_samples": []}
 
         train_file = os.path.join(path, "train.json")
@@ -42,6 +43,20 @@ class Generator(load_data.Generator):
             self.trainset["users"] += data["users"]
             self.trainset["user_data"].update(data["user_data"])
             self.trainset["num_samples"] += data["num_samples"]
+
+        val_file = os.path.join(path, "val.json")
+        if not os.path.isfile(val_file):
+            raise FileNotFoundError(
+                "AVE validation partition is missing: {}. Re-run "
+                "scripts/prepare_ave_partitions.py; final test data must not be used as validation."
+                .format(val_file)
+            )
+        with open(val_file, "r", encoding="utf-8") as f:
+            logging.info("loading %s", val_file)
+            data = json.load(f)
+            self.valset["users"] += data["users"]
+            self.valset["user_data"].update(data["user_data"])
+            self.valset["num_samples"] += data["num_samples"]
 
         test_file = os.path.join(path, "test.json")
         with open(test_file, "r", encoding="utf-8") as f:
@@ -110,9 +125,14 @@ def get_trainloader(trainset, batch_size):
     return DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
 
-def get_testloader(testset, batch_size):
-    dataset = _to_dataset(testset)
+def get_evalloader(evalset, batch_size):
+    dataset = _to_dataset(evalset)
     return DataLoader(dataset, batch_size=batch_size, shuffle=False)
+
+
+def get_testloader(testset, batch_size):
+    """Backward-compatible alias for a non-training evaluation loader."""
+    return get_evalloader(testset, batch_size)
 
 
 def extract_weights(model):
@@ -198,23 +218,28 @@ def train(model, trainloader, optimizer, epochs, reg=None, rho=None):
     return train_loss
 
 
-def test(model, testloader):
+def evaluate(model, evalloader):
     model.to(device)
     model.eval()
     criterion = nn.CrossEntropyLoss().to(device)
 
-    test_loss = 0.0
+    eval_loss = 0.0
     correct = 0
-    total = len(testloader.dataset)
+    total = len(evalloader.dataset)
     with torch.no_grad():
-        for x, y in testloader:
+        for x, y in evalloader:
             x, y = x.to(device), y.to(device)
             logits = model(x)
-            test_loss += criterion(logits, y).item()
+            eval_loss += criterion(logits, y).item()
             _, predicted = logits.max(1)
             correct += predicted.eq(y).sum().item()
 
-    test_loss = test_loss / len(testloader)
+    eval_loss = eval_loss / len(evalloader)
     accuracy = correct / max(1, total)
-    logging.debug("Test loss: %s Accuracy: %.2f%%", test_loss, 100 * accuracy)
-    return test_loss, accuracy
+    logging.debug("Evaluation loss: %s Accuracy: %.2f%%", eval_loss, 100 * accuracy)
+    return eval_loss, accuracy
+
+
+def test(model, testloader):
+    """Backward-compatible alias. Call evaluate() for validation or final test explicitly."""
+    return evaluate(model, testloader)

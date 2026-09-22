@@ -325,16 +325,16 @@ class Gateway(object):
                                                                       T_new))
 
                   
-            testset = loader.get_testset()
+            valset = loader.get_valset()
             batch_size = self.config.fl.batch_size
-            testloader = fl_model.get_testloader(testset, batch_size)
-            test_loss, accuracy = fl_model.test(self.model, testloader)
+            valloader = fl_model.get_evalloader(valset, batch_size)
+            val_loss, val_accuracy = fl_model.evaluate(self.model, valloader)
 
-            self._push_mmqs_regional_feedback(round, accuracy)
-            logging.info('test loss: {} acc: {}'.format(test_loss, accuracy))
-            self._quality_guard_update_after_eval(round, test_loss, accuracy)
-            logger.log_value('gw{}_accuracy'.format(self.gateway_id),
-                             accuracy, int(T_new * 1000))
+            self._push_mmqs_regional_feedback(round, val_accuracy)
+            logging.info('val loss: {} val acc: {}'.format(val_loss, val_accuracy))
+            self._quality_guard_update_after_eval(round, val_loss, val_accuracy)
+            logger.log_value('gw{}_val_accuracy'.format(self.gateway_id),
+                             val_accuracy, int(T_new * 1000))
 
                          
             T_start = T_new
@@ -347,8 +347,8 @@ class Gateway(object):
                              self.client_samples,
                              total_samples, T_new + self.delay,
                              T_new - T_old + self.delay,
-                             self.cs.sel_time, gateway_comm_size, test_loss,
-                             accuracy,
+                             self.cs.sel_time, gateway_comm_size, val_loss,
+                             val_accuracy,
                              gateway_comm_client_up=gateway_comm_client_up,
                              gateway_comm_prefetch=gateway_comm_prefetch)
         return T_new + self.delay
@@ -606,10 +606,10 @@ class Gateway(object):
                 if len(clients_branch) > 0:
                     updated_weights_branch = self._federated_averaging_for_model(local_model, reports_branch)
                 fl_model.load_weights(local_model, updated_weights_branch)
-                testset = self.loader.get_testset()
+                valset = self.loader.get_valset()
                 batch_size = self.config.fl.batch_size
-                testloader = fl_model.get_testloader(testset, batch_size)
-                _, acc_branch = fl_model.test(local_model, testloader)
+                valloader = fl_model.get_evalloader(valset, batch_size)
+                _, acc_branch = fl_model.evaluate(local_model, valloader)
                 return branch_name, float(acc_branch), list(clients_branch)
             finally:
                 _ = [client.set_available() for client in clients_branch]
@@ -685,10 +685,10 @@ class Gateway(object):
                     self.gateway_id, available_cnt, self.throughput_ub, self.throughput
                 )
             )
-            testset = loader.get_testset()
+            valset = loader.get_valset()
             batch_size = self.config.fl.batch_size
-            testloader = fl_model.get_testloader(testset, batch_size)
-            test_loss, accuracy = fl_model.test(self.model, testloader)
+            valloader = fl_model.get_evalloader(valset, batch_size)
+            test_loss, accuracy = fl_model.evaluate(self.model, valloader)
             gateway_weights = fl_model.extract_weights(self.model)
             if self.client_samples is None:
                 total_samples = 0
@@ -798,14 +798,14 @@ class Gateway(object):
             self.async_save_gateway_model(self.model, saved_model_path, T_cur)
 
                   
-            testset = loader.get_testset()
+            valset = loader.get_valset()
             batch_size = self.config.fl.batch_size
-            testloader = fl_model.get_testloader(testset, batch_size)
-            test_loss, accuracy = fl_model.test(self.model, testloader)
+            valloader = fl_model.get_evalloader(valset, batch_size)
+            test_loss, accuracy = fl_model.evaluate(self.model, valloader)
 
             self._push_mmqs_regional_feedback(round, accuracy)
-            logging.info('test loss: {} acc: {}\n'.format(test_loss, accuracy))
-            logger.log_value('gw{}_accuracy'.format(self.gateway_id),
+            logging.info('val loss: {} val acc: {}\n'.format(test_loss, accuracy))
+            logger.log_value('gw{}_val_accuracy'.format(self.gateway_id),
                              accuracy, int(T_cur * 1000))
 
             self._update_mmqs_participation_history(new_clients)
@@ -839,10 +839,10 @@ class Gateway(object):
                 self.throughput += client.throughput
 
         if test_loss is None or accuracy is None:
-            testset = loader.get_testset()
+            valset = loader.get_valset()
             batch_size = self.config.fl.batch_size
-            testloader = fl_model.get_testloader(testset, batch_size)
-            test_loss, accuracy = fl_model.test(self.model, testloader)
+            valloader = fl_model.get_evalloader(valset, batch_size)
+            test_loss, accuracy = fl_model.evaluate(self.model, valloader)
 
         gateway_weights = fl_model.extract_weights(self.model)
         total_samples = np.sum(self.client_samples[self.conn_ind])
@@ -957,14 +957,14 @@ class Gateway(object):
             self.sync_save_gateway_model(self.model, saved_model_path)
 
                   
-            testset = loader.get_testset()
+            valset = loader.get_valset()
             batch_size = self.config.fl.batch_size
-            testloader = fl_model.get_testloader(testset, batch_size)
-            test_loss, accuracy = fl_model.test(self.model, testloader)
+            valloader = fl_model.get_evalloader(valset, batch_size)
+            test_loss, accuracy = fl_model.evaluate(self.model, valloader)
 
             self._push_mmqs_regional_feedback(round, accuracy)
-            logging.info('test loss: {} acc: {}\n'.format(test_loss, accuracy))
-            logger.log_value('gw{}_accuracy'.format(self.gateway_id),
+            logging.info('val loss: {} val acc: {}\n'.format(test_loss, accuracy))
+            logger.log_value('gw{}_val_accuracy'.format(self.gateway_id),
                              accuracy, int(T_cur * 1000))
 
                                                           
@@ -1401,9 +1401,9 @@ class Gateway(object):
                 self.prefetch_delay_reduction_ratio_runtime
             )
 
-    def update_global_loss_feedback(self, test_loss, round_id):
-        """Receive cloud/global loss feedback for one-step-lag dynamic-K control."""
-        loss = self._safe_float(test_loss, np.nan)
+    def update_global_loss_feedback(self, val_loss, round_id):
+        """Receive global validation loss for one-step-lag Dynamic Top-k control."""
+        loss = self._safe_float(val_loss, np.nan)
         if not np.isfinite(loss):
             return
         if np.isfinite(self.loss_aware_topk_global_loss_latest):
@@ -1489,13 +1489,13 @@ class Gateway(object):
             'prev_loss': float(prev_ema),
         }
 
-    def _quality_guard_update_after_eval(self, round_id, test_loss, accuracy):
-        """Update guard status after current-round evaluation metrics are available."""
+    def _quality_guard_update_after_eval(self, round_id, val_loss, val_accuracy):
+        """Update guard status after current-round validation metrics are available."""
         if not self.quality_guard_enabled:
             return
 
-        loss_now = self._safe_float(test_loss, np.nan)
-        acc_now = self._safe_float(accuracy, np.nan)
+        loss_now = self._safe_float(val_loss, np.nan)
+        acc_now = self._safe_float(val_accuracy, np.nan)
         if (not np.isfinite(loss_now)) or (not np.isfinite(acc_now)):
             return
 
@@ -1874,7 +1874,7 @@ class Report(object):
     def __init__(self, gateway, weights, grads, client_samples,
                  total_samples, finish_time, gateway_round_time,
                  gateway_cs_time, total_comm_size,
-                 test_loss, accuracy,
+                 val_loss, val_accuracy,
                  gateway_comm_client_up=0.0,
                  gateway_comm_prefetch=0.0):
         self.gateway_id = gateway.gateway_id
@@ -1889,5 +1889,9 @@ class Report(object):
         self.gateway_comm_size = total_comm_size
         self.gateway_comm_client_up = gateway_comm_client_up
         self.gateway_comm_prefetch = gateway_comm_prefetch
-        self.test_loss = test_loss
-        self.accuracy = accuracy
+        self.val_loss = val_loss
+        self.val_accuracy = val_accuracy
+        # Compatibility aliases for legacy report consumers. New code must use
+        # val_loss/val_accuracy so these values are not mistaken for final test metrics.
+        self.test_loss = val_loss
+        self.accuracy = val_accuracy

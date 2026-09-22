@@ -216,6 +216,17 @@ class Server(object):
                 logging.info('Target accuracy reached.')
                 break
 
+        if self.config.model == 'AVE':
+            import fl_model
+            testset = self.loader.get_testset()
+            testloader = fl_model.get_evalloader(testset, self.config.fl.batch_size)
+            final_test_loss, final_test_accuracy = fl_model.evaluate(self.model, testloader)
+            logging.info(
+                'Final test loss: {} Final test accuracy: {:.2f}%'.format(
+                    final_test_loss, 100 * final_test_accuracy
+                )
+            )
+
         if reports_path:
             with open(reports_path, 'wb') as f:
                 pickle.dump(self.saved_reports, f)
@@ -253,9 +264,14 @@ class Server(object):
         self.save_model(self.model, self.config.paths.model)
 
                                     
-        if self.config.clients.do_test:                                            
+        if self.config.clients.do_test and self.config.model != 'AVE':
             accuracy = self.accuracy_averaging(reports)
-        else:                                
+        elif self.config.model == 'AVE':
+            valset = self.loader.get_valset()
+            batch_size = self.config.fl.batch_size
+            valloader = fl_model.get_evalloader(valset, batch_size)
+            _, accuracy = fl_model.evaluate(self.model, valloader)
+        else:
             testset = self.loader.get_testset()
             batch_size = self.config.fl.batch_size
             testloader = fl_model.get_testloader(testset, batch_size)

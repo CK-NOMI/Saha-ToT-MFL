@@ -49,7 +49,7 @@ class SyncServer(Server):
             ))
 
                                     
-        self.records = Record("t", "test_loss", "acc", "total_comm_size",
+        self.records = Record("t", "val_loss", "val_acc", "total_comm_size",
                               "cloud_ca_time")
         for gateway_id in range(total_gateways):
             self.records.insert_key("gw_cs_time_{}".format(gateway_id),
@@ -110,6 +110,31 @@ class SyncServer(Server):
         if self.metrics_csv_path is None:
             return
         self.records.save_latest_record(self.metrics_csv_path)
+
+    def _evaluate_global_split(self, split_name):
+        """Evaluate the global model on one explicit AVE split only."""
+        import fl_model
+        if split_name == 'val':
+            evalset = self.loader.get_valset()
+        elif split_name == 'test':
+            evalset = self.loader.get_testset()
+        else:
+            raise ValueError('unsupported evaluation split: {}'.format(split_name))
+        evalloader = fl_model.get_evalloader(evalset, self.config.fl.batch_size)
+        return fl_model.evaluate(self.model, evalloader)
+
+    def _log_final_test(self, logger, timestamp_ms):
+        """Final-test reporting only; never feed this result into training control."""
+        final_test_loss, final_test_accuracy = self._evaluate_global_split('test')
+        logging.info(
+            'Final test loss: {} Final test accuracy: {:.2f}%'.format(
+                final_test_loss, 100 * final_test_accuracy
+            )
+        )
+        if logger is not None:
+            logger.log_value('final_test_loss', final_test_loss, int(timestamp_ms))
+            logger.log_value('final_test_accuracy', final_test_accuracy, int(timestamp_ms))
+        return final_test_loss, final_test_accuracy
 
     def _resolve_metrics_csv_path(self):
         raw = getattr(self.config.paths, "metrics_csv", None)
@@ -342,19 +367,11 @@ class SyncServer(Server):
             T_old = T_new
 
                                         
-            if self.config.clients.do_test:                                            
-                _ = [client.test(self.model) for client in self.clients]
-                reports = self.reporting(self.clients)
-                test_loss, accuracy = self.accuracy_averaging(reports)
-            else:                                
-                testset = self.loader.get_testset()
-                batch_size = self.config.fl.batch_size
-                testloader = fl_model.get_testloader(testset, batch_size)
-                test_loss, accuracy = fl_model.test(self.model, testloader)
+            val_loss, val_accuracy = self._evaluate_global_split('val')
 
             logging.info(
-                'Test loss: {} Average accuracy: {:.2f}%'.format(
-                    test_loss, 100 * accuracy
+                'Validation loss: {} Validation accuracy: {:.2f}%'.format(
+                    val_loss, 100 * val_accuracy
                 ))
 
                                                                            
@@ -363,7 +380,7 @@ class SyncServer(Server):
                 if updater is None:
                     continue
                 try:
-                    updater(test_loss, round)
+                    updater(val_loss, round)
                 except Exception as exc:                                
                     logging.warning(
                         'Push global loss feedback failed: gw=%s round=%s err=%s',
@@ -372,13 +389,13 @@ class SyncServer(Server):
 
                                 
             if logger is not None:
-                logger.log_value('test_loss', test_loss, int(display_time * 1000))
-                logger.log_value('accuracy', accuracy, int(display_time * 1000))
+                logger.log_value('val_loss', val_loss, int(display_time * 1000))
+                logger.log_value('val_accuracy', val_accuracy, int(display_time * 1000))
 
                            
             wall_clock_s = float(time.time() - run_wall_start)
-            self.records.append_record(t=display_time, test_loss=test_loss,
-                                       acc=accuracy,
+            self.records.append_record(t=display_time, val_loss=val_loss,
+                                       val_acc=val_accuracy,
                                        cloud_ca_time=self.ca.asso_time,
                                        wall_clock_s=wall_clock_s,
                                        **self._comm_record_kwargs())
@@ -392,11 +409,11 @@ class SyncServer(Server):
                                                     
             if model != 'HPWREN' and target_accuracy and\
                     (self.records.get_latest_acc() >= target_accuracy):
-                logging.info('Target accuracy reached.')
+                logging.info('Target validation accuracy reached.')
                 break
             elif model == 'HPWREN' and target_accuracy and\
                     (self.records.get_latest_acc() <= target_accuracy):
-                logging.info('Target MSE reached.')
+                logging.info('Target validation MSE reached.')
                 break
 
                                                
@@ -412,6 +429,8 @@ class SyncServer(Server):
                         self.gateways[gateway_id_old].remove_client(self.clients[i].client_id)
                         self.gateways[gateway_id].add_client(self.clients[i].client_id)
                         self.clients[i].set_gateway(gateway_id)
+
+        self._log_final_test(logger, self._display_time(T_old, run_wall_start) * 1000)
 
                          
                                                 

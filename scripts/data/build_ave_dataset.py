@@ -20,6 +20,11 @@ Each entry in index.json contains:
 
 Requirements:
     - FFmpeg must be installed and available in PATH.
+    - Text captions must be produced from the extracted representative frame
+      only.  Supply an existing caption JSON file, or configure an
+      OpenAI-compatible vision-language-model (VLM) endpoint with the command
+      line arguments below.  Class names, labels, and event annotations are
+      never provided to the captioning step.
     - The original dataset should be extracted to:
         data/AVE_raw/AVE_Dataset/
           ├─ AVE/            (contains *.mp4 files)
@@ -31,7 +36,9 @@ Requirements:
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import os
 import shutil
 import math
 import subprocess
@@ -48,6 +55,14 @@ SPLIT_FILES = {
     "val": RAW_ROOT / "valSet.txt",
     "test": RAW_ROOT / "testSet.txt",
 }
+
+# This is deliberately restricted to observable image content.  Do not add
+# dataset class names, event labels, split information, or video metadata here.
+CAPTION_PROMPT = (
+    "Describe only the visible scene and actions in this image in one concise "
+    "natural-language sentence. Do not infer or mention dataset labels, class "
+    "names, event categories, filenames, or any metadata."
+)
 
 
 @dataclass
@@ -114,9 +129,92 @@ def build_index(entries: List[Dict], output_path: Path) -> None:
         json.dump(entries, f, indent=2)
 
 
-def main(output_root: Path = OUTPUT_ROOT) -> None:
+def load_caption_map(path: Path) -> Dict[str, str]:
+    """Load VLM captions keyed by sample id or source video id.
+
+    Supported JSON forms are ``{"sample_id": "caption"}`` and a list of
+    objects containing ``caption`` plus either ``id``/``sample_id`` or
+    ``video_id``.  The captions are expected to have been generated from the
+    representative frames without ground-truth metadata.
+    """
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    captions: Dict[str, str] = {}
+    if isinstance(payload, dict):
+        for key, value in payload.items():
+            if isinstance(value, str) and value.strip():
+                captions[str(key)] = value.strip()
+    elif isinstance(payload, list):
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            caption = item.get("caption")
+            key = item.get("id", item.get("sample_id", item.get("video_id")))
+            if key is not None and isinstance(caption, str) and caption.strip():
+                captions[str(key)] = caption.strip()
+    else:
+        raise ValueError("captions JSON must be an object or a list of caption records")
+    if not captions:
+        raise ValueError("captions JSON contains no usable captions")
+    return captions
+
+
+def caption_from_vlm(image_path: Path, args: argparse.Namespace) -> str:
+    """Generate one label-independent caption from an extracted frame."""
+    try:
+        import requests
+    except ImportError as exc:
+        raise RuntimeError(
+            "VLM caption generation requires the requests package; install requirements.txt first"
+        ) from exc
+    api_key = os.environ.get(args.vlm_api_key_env, "")
+    if not api_key:
+        raise RuntimeError(
+            "VLM API key is unavailable; set {} or use --captions-json".format(
+                args.vlm_api_key_env
+            )
+        )
+    image_b64 = base64.b64encode(image_path.read_bytes()).decode("ascii")
+    payload = {
+        "model": args.vlm_model,
+        "messages": [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": CAPTION_PROMPT},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + image_b64}},
+            ],
+        }],
+        "temperature": 0.0,
+        "max_tokens": args.vlm_max_tokens,
+    }
+    response = requests.post(
+        args.vlm_api_url,
+        headers={"Authorization": "Bearer " + api_key, "Content-Type": "application/json"},
+        json=payload,
+        timeout=args.vlm_timeout,
+    )
+    response.raise_for_status()
+    data = response.json()
+    try:
+        caption = data["choices"][0]["message"]["content"].strip()
+    except (KeyError, IndexError, AttributeError, TypeError) as exc:
+        raise RuntimeError("VLM response does not contain a text caption") from exc
+    if not caption:
+        raise RuntimeError("VLM returned an empty caption")
+    return caption
+
+
+def main(output_root: Path = OUTPUT_ROOT, args: argparse.Namespace = None) -> None:
+    if args is None:
+        raise ValueError("caption configuration is required")
     if not VIDEO_DIR.exists():
         raise FileNotFoundError(f"Video directory not found: {VIDEO_DIR}")
+
+    caption_map = load_caption_map(Path(args.captions_json)) if args.captions_json else None
+    if caption_map is None and not (args.vlm_api_url and args.vlm_model and args.vlm_api_key_env):
+        raise ValueError(
+            "Provide --captions-json, or configure --vlm-api-url, --vlm-model, and --vlm-api-key-env. "
+            "There is intentionally no label-derived text fallback."
+        )
 
     for split, file in SPLIT_FILES.items():
         if not file.exists():
@@ -178,11 +276,16 @@ def main(output_root: Path = OUTPUT_ROOT) -> None:
                         path.unlink()
                 continue
 
-            text_content = (
-                f"This {split} sample corresponds to class {entry.class_name} "
-                f"from video {entry.video_id}. "
-                f"The event occurs between {entry.start:.2f}s and {entry.end:.2f}s."
-            )
+            if caption_map is not None:
+                text_content = caption_map.get(sample_id) or caption_map.get(entry.video_id)
+                if not text_content:
+                    raise KeyError(
+                        "No caption for {} (or source video {}) in {}".format(
+                            sample_id, entry.video_id, args.captions_json
+                        )
+                    )
+            else:
+                text_content = caption_from_vlm(image_path, args)
             text_path.write_text(text_content, encoding="utf-8")
 
             records.append({
@@ -209,5 +312,21 @@ if __name__ == "__main__":
         default=OUTPUT_ROOT,
         help="Directory to store processed samples (default: data/ave)",
     )
+    parser.add_argument(
+        "--captions-json",
+        type=str,
+        default="",
+        help="Existing label-independent VLM captions, keyed by sample id or video id.",
+    )
+    parser.add_argument("--vlm-api-url", type=str, default="", help="OpenAI-compatible VLM chat endpoint.")
+    parser.add_argument("--vlm-model", type=str, default="", help="Vision-language model identifier.")
+    parser.add_argument(
+        "--vlm-api-key-env",
+        type=str,
+        default="",
+        help="Environment-variable name containing the VLM API key.",
+    )
+    parser.add_argument("--vlm-timeout", type=float, default=120.0)
+    parser.add_argument("--vlm-max-tokens", type=int, default=96)
     args = parser.parse_args()
-    main(args.output_dir)
+    main(args.output_dir, args)

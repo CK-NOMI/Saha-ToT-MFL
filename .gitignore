@@ -62,6 +62,15 @@ tensorboard*/
 # =========================
 data/
 result/
+data/AVE_raw/
+data/ave/
+data/ave_fed/
+local_models/
+checkpoints/
+results/
+logs/
+wandb/
+*.zip
 
 # Keep runnable scripts and docs under result when needed
 !result/

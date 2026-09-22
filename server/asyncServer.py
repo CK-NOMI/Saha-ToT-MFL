@@ -121,8 +121,8 @@ class AsyncServer(SyncServer):
 
                                     
             report = select_gateway.get_report()
-            logging.info('Select gateway {}, time {} s, test loss: {}, accuracy: {}'.format(
-                select_gateway.gateway_id, display_time, report.test_loss, report.accuracy))
+            logging.info('Select gateway {}, time {} s, regional validation loss: {}, accuracy: {}'.format(
+                select_gateway.gateway_id, display_time, report.val_loss, report.val_accuracy))
 
                                                         
             self.grads[report.conn_ind] = report.grads[report.conn_ind]
@@ -148,32 +148,24 @@ class AsyncServer(SyncServer):
             self.async_save_model(self.model, saved_model_path, T_cur)
 
                                         
-            if self.config.clients.do_test:                                            
-                _ = [client.test(self.model) for client in self.clients]
-                reports = self.reporting(self.clients)
-                test_loss, accuracy = self.accuracy_averaging(reports)
-            else:                                
-                testset = self.loader.get_testset()
-                batch_size = self.config.fl.batch_size
-                testloader = fl_model.get_testloader(testset, batch_size)
-                test_loss, accuracy = fl_model.test(self.model, testloader)
+            val_loss, val_accuracy = self._evaluate_global_split('val')
 
             display_time = self._display_time(T_cur, run_wall_start)
             logging.info(
-                'time: {} Test loss: {} Average accuracy: {:.2f}%\n'.format(
-                    display_time, test_loss, 100 * accuracy
+                'time: {} Validation loss: {} Validation accuracy: {:.2f}%\n'.format(
+                    display_time, val_loss, 100 * val_accuracy
                 ))
 
                                 
             if logger is not None:
-                logger.log_value('test_loss', test_loss, int(display_time * 1000))
-                logger.log_value('accuracy', accuracy, int(display_time * 1000))
+                logger.log_value('val_loss', val_loss, int(display_time * 1000))
+                logger.log_value('val_accuracy', val_accuracy, int(display_time * 1000))
                 logger.log_value('cs_gamma', self.gateways[0].cs_gamma, int(display_time * 1000))
 
                            
             wall_clock_s = float(time.time() - run_wall_start)
-            self.records.append_record(t=display_time, test_loss=test_loss,
-                                       acc=accuracy,
+            self.records.append_record(t=display_time, val_loss=val_loss,
+                                       val_acc=val_accuracy,
                                        cloud_ca_time=self.ca.asso_time,
                                        wall_clock_s=wall_clock_s,
                                        **self._comm_record_kwargs())
@@ -187,11 +179,11 @@ class AsyncServer(SyncServer):
                                                     
             if model != 'HPWREN' and target_accuracy and\
                     (self.records.get_latest_acc() >= target_accuracy):
-                logging.info('Target accuracy reached.')
+                logging.info('Target validation accuracy reached.')
                 break
             elif model == 'HPWREN' and target_accuracy and\
                     (self.records.get_latest_acc() <= target_accuracy):
-                logging.info('Target MSE reached.')
+                logging.info('Target validation MSE reached.')
                 break
 
                                                
@@ -227,6 +219,7 @@ class AsyncServer(SyncServer):
                                                                    
 
                                            
+        self._log_final_test(logger, self._display_time(T_cur, run_wall_start) * 1000)
         saved_model_path = self.config.paths.saved_model
         self.rm_old_models(saved_model_path, T_cur + 1.0)
 
