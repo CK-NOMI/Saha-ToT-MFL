@@ -104,7 +104,7 @@ def build_cmd(args, cfg_path, trial):
 
 def main():
     here = Path(__file__).resolve().parent
-    repo_root = here.parents[2]
+    repo_root = here.parents[4]
     default_run_dir = repo_root / "result" / "experiments" / "ave_results" / "exp3" / "ave_alpha_sensitivity_noniid_c36_r850_t6"
 
     parser = argparse.ArgumentParser(description="AVE Dirichlet alpha sensitivity runner (main method: MMQS+Prefetch+ToT-Lite)")
@@ -113,7 +113,7 @@ def main():
     parser.add_argument("--run_dir", type=str, default=str(default_run_dir))
     parser.add_argument("--data_root", type=str, default="./data/ave_fed")
     parser.add_argument("--alphas", type=str, default="0.1,0.3,0.5,1.0")
-    parser.add_argument("--trials", type=str, default="0,1,2,3,4,5")
+    parser.add_argument("--trials", type=str, default="0,1,2,3,4")
     parser.add_argument("--rounds", type=int, default=850)
     parser.add_argument("--adjust_round", type=int, default=20)
     parser.add_argument("--gateway_rounds", type=int, default=8)
@@ -253,7 +253,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 

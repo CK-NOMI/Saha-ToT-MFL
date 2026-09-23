@@ -41,7 +41,7 @@ parser.add_argument('--trial', type=int, default=0,
 parser.add_argument('--mmqs_enabled', action='store_true',
                     help='Enable MMQS module skeleton. Default is disabled.')
 parser.add_argument('--mmqs_loss_aware_topk_enabled', action='store_true',
-                    help='Enable loss-aware Top-K client budget controller (paper Eq.11-12).')
+                    help='Enable loss-aware Top-K client budget controller (paper Eq. (7)-(10)).')
 parser.add_argument('--mmqs_beta', type=float, default=5.0,
                     help='Paper symbol beta in alpha(t_r)=rho_min+(rho_max-rho_min)*Sigmoid(beta*delta(t_r)).')
 parser.add_argument('--mmqs_rho_min', type=float, default=0.75,

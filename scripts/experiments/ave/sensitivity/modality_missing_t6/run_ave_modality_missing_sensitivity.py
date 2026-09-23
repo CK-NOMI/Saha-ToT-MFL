@@ -100,7 +100,7 @@ def build_cmd(args, cfg_path, trial):
 
 def main():
     here = Path(__file__).resolve().parent
-    repo_root = here.parents[2]
+    repo_root = here.parents[4]
     default_run_dir = repo_root / "result" / "experiments" / "ave_results" / "exp3" / "ave_modality_missing_sensitivity_r850_t6"
 
     parser = argparse.ArgumentParser(description="AVE modality-missing sensitivity runner (ToT-Lite main method)")
@@ -112,7 +112,7 @@ def main():
     parser.add_argument("--data_miss_image", type=str, default="./data/ave_fed/noniid_a1p0_c36_pt_fast_mi0p3_ma0_mt0")
     parser.add_argument("--data_miss_audio", type=str, default="./data/ave_fed/noniid_a1p0_c36_pt_fast_mi0_ma0p3_mt0")
     parser.add_argument("--data_miss_text", type=str, default="./data/ave_fed/noniid_a1p0_c36_pt_fast_mi0_ma0_mt0p3")
-    parser.add_argument("--trials", type=str, default="0,1,2,3,4,5")
+    parser.add_argument("--trials", type=str, default="0,1,2,3,4")
     parser.add_argument("--rounds", type=int, default=850)
     parser.add_argument("--adjust_round", type=int, default=20)
     parser.add_argument("--gateway_rounds", type=int, default=8)
@@ -264,5 +264,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 

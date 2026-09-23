@@ -78,7 +78,7 @@ def main():
     parser.add_argument("--run_root", type=str, default=str(here))
     parser.add_argument("--base_config", type=str, default="configs/AVE/hybrid_noniid_ave_tuned.json")
     parser.add_argument("--data_path", type=str, default="./data/ave_fed/noniid_a1p0_c36_pt_fast")
-    parser.add_argument("--trials", type=str, default="0")
+    parser.add_argument("--trials", type=str, default="0,1,2,3,4")
     parser.add_argument("--rounds", type=int, default=850)
     parser.add_argument("--sync_rounds", type=int, default=150)
     parser.add_argument("--adjust_round", type=int, default=20)
@@ -172,5 +172,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 

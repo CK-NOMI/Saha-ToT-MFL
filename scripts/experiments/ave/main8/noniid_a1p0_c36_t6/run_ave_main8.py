@@ -218,6 +218,11 @@ def build_cmd(args, cfg_path, method, trial):
                 "--mmqs_enabled",
                 "--mmqs_weight_mode",
                 str(method.get("mmqs_weight_mode", "static")),
+                "--mmqs_loss_aware_topk_enabled",
+                "--mmqs_W",
+                "10",
+                "--mmqs_beta",
+                "5",
             ]
         )
     if method["prefetch"]:
@@ -259,7 +264,7 @@ def main():
         type=str,
         default="pure_sync,pure_async,hybrid,mmqs_fw,mmqs_wo_mc,mmqs",
     )
-    parser.add_argument("--trials", type=str, default="0,1,2,3,4,5")
+    parser.add_argument("--trials", type=str, default="0,1,2,3,4")
     parser.add_argument("--rounds", type=int, default=850)
     parser.add_argument("--sync_rounds", type=int, default=150)
     parser.add_argument("--adjust_round", type=int, default=20)
@@ -535,7 +540,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 

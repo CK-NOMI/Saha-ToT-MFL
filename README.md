@@ -247,7 +247,7 @@ For main AVE runs (excluding sensitivity sweeps), the default settings are:
 
 - `mu = 1.5`: staleness decay exponent in polynomial staleness weighting.
 - `beta = 5`: loss-aware dynamic Top-K control strength.
-- `w = 10`: sliding window size (`mmqs_W`) used by loss-aware dynamic Top-K control.
+- `W = 10`: historical-performance window (`mmqs_W`) used by the MMQS performance score.
 
 These defaults are used for the main configuration unless a sensitivity script explicitly overrides them.
 
@@ -374,5 +374,4 @@ Partition generation common issues:
 - **Citation**: A BibTeX entry will be added after the manuscript becomes publicly available.
 - **License**: MIT License. See the `LICENSE` file in the repository root.
 - **Contact**: open an issue in this repository or contact the corresponding authors listed in the manuscript.
-
 

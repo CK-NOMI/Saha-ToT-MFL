@@ -8,7 +8,7 @@ class Config(object):
     def __init__(self, args):
         self.paths = ""
                           
-        with open(args.config, 'r') as config:
+        with open(args.config, 'r', encoding='utf-8-sig') as config:
             self.config = json.load(config)
         self.selection = args.selection
         self.cs_gamma_from = args.cs_gamma_from
@@ -353,4 +353,3 @@ class Config(object):
             'effective switches: mmqs=%s quality_guard=%s prefetch=%s hybrid=%s',
             self.mmqs.enabled, self.quality_guard.enabled, self.prefetch.enabled, self.hybrid.enabled
         )
-

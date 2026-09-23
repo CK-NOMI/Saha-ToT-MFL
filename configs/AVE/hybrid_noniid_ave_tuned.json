@@ -28,11 +28,11 @@
     "throughput_ub": 100
   },
   "async": {
-    "alpha_0": 1.0,
+    "alpha_0": 0.9,
     "rho": 0.05,
     "staleness_func": "polynomial",
     "lambda_": 0.5,
-    "mu": 0.5
+    "mu": 1.5
   },
   "link_speed": {
     "min": 50,
@@ -51,5 +51,4 @@
     "comp_time": "./delays/comp1.txt"
   }
 }
-
 

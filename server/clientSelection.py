@@ -1452,11 +1452,30 @@ class ClientSelection(object):
             return '[]'
         return '[' + ','.join('{:.4f}'.format(float(v)) for v in arr.tolist()) + ']'
 
-    @staticmethod
-    def _mmqs_get_item_weights(item):
+    def _mmqs_tot_modal_is_disabled(self):
+        return (
+            self.mmqs_weight_mode == 'tot_api' and
+            int(self._mmqs_safe_float(os.environ.get('MMQS_TOT_DISABLE_MODAL', '0'), 0.0)) != 0
+        )
+
+    def _mmqs_apply_tot_modal_constraint(self, weights):
+        arr = np.array(weights, dtype=float).reshape((-1,))
+        if arr.size != 6 or not self._mmqs_tot_modal_is_disabled():
+            return arr
+        arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0)
+        arr = np.maximum(arr, 0.0)
+        arr[1] = 0.0
+        denom = float(np.sum(arr))
+        if denom <= self.mmqs_eps:
+            arr = np.ones(6, dtype=float)
+            arr[1] = 0.0
+            denom = float(np.sum(arr))
+        return arr / max(self.mmqs_eps, denom)
+
+    def _mmqs_get_item_weights(self, item):
         if not isinstance(item, dict):
             return np.array([], dtype=float)
-        return np.array(item.get('weights', []), dtype=float)
+        return self._mmqs_apply_tot_modal_constraint(item.get('weights', []))
 
     def _mmqs_normalize_weights_vec(self, weights, fallback=None):
         arr = np.array(weights, dtype=float).reshape((-1,))
@@ -1473,7 +1492,7 @@ class ClientSelection(object):
         if denom <= self.mmqs_eps:
             arr = np.array([1.0 / 6.0] * 6, dtype=float)
             denom = float(np.sum(arr))
-        return arr / max(self.mmqs_eps, denom)
+        return self._mmqs_apply_tot_modal_constraint(arr / max(self.mmqs_eps, denom))
 
     @staticmethod
     def _mmqs_tot_api_blend_ratio(parse_source):
@@ -1542,17 +1561,18 @@ class ClientSelection(object):
             return
 
         remain = max(0.0, 1.0 - float(target_modal))
+        non_modal_indices = np.array([0, 2, 3, 4, 5], dtype=int)
         for key, vec in list(self.mmqs_tot_v1_profiles.items()):
             arr = np.array(vec, dtype=float).reshape((-1,))
             if arr.size != 6:
                 continue
-            head = np.maximum(arr[:5], 0.0)
+            head = np.maximum(arr[non_modal_indices], 0.0)
             denom = float(np.sum(head))
             if denom <= self.mmqs_eps:
-                arr[:5] = np.array([remain / 5.0] * 5, dtype=float)
+                arr[non_modal_indices] = np.array([remain / 5.0] * 5, dtype=float)
             else:
-                arr[:5] = (head / denom) * remain
-            arr[5] = float(target_modal)
+                arr[non_modal_indices] = (head / denom) * remain
+            arr[1] = float(target_modal)
             self.mmqs_tot_v1_profiles[key] = arr
 
         logging.info(

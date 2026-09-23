@@ -81,7 +81,7 @@ def parse_str_list(raw):
 
 
 def is_partition_ready(out_dir):
-    required = ["train.json", "test.json", "meta.json"]
+    required = ["train.json", "val.json", "test.json", "meta.json"]
     return all((out_dir / name).exists() for name in required)
 
 
@@ -132,7 +132,7 @@ def build_cmd(args, prepare_script, task):
 def resolve_repo_root(repo_root_arg):
     if repo_root_arg:
         return Path(repo_root_arg).resolve()
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[4]
 
 
 def main():
@@ -225,4 +225,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
