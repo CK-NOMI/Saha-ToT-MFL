@@ -82,6 +82,11 @@ def build_cmd(args, cfg_path, trial):
         "--mmqs_enabled",
         "--mmqs_weight_mode",
         "tot_api",
+        "--mmqs_loss_aware_topk_enabled",
+        "--mmqs_W",
+        "10",
+        "--mmqs_beta",
+        "5",
         "--prefetch_enabled",
         "--prefetch_top_m",
         str(int(args.prefetch_top_m)),
@@ -264,4 +269,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

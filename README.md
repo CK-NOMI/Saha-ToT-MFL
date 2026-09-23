@@ -49,7 +49,8 @@ Other dependencies (e.g., `transformers`, `open-clip-torch`, `Pillow`, `scikit-l
 ```bash
 conda create -n mmqs-py37 python=3.7 -y
 conda activate mmqs-py37
-pip install -r requirements.txt
+pip install -r requirements.txt \
+  --extra-index-url https://download.pytorch.org/whl/cu113
 python -c "import torch; print(torch.cuda.is_available())"
 ```
 
@@ -374,4 +375,3 @@ Partition generation common issues:
 - **Citation**: A BibTeX entry will be added after the manuscript becomes publicly available.
 - **License**: MIT License. See the `LICENSE` file in the repository root.
 - **Contact**: open an issue in this repository or contact the corresponding authors listed in the manuscript.
-
