@@ -57,10 +57,10 @@ parser.add_argument('--mmqs_tot_api_enabled', action='store_true',
                     help='Enable external ToT API reasoning for MMQS.')
 parser.add_argument('--mmqs_tot_api_url', type=str,
                     default='',
-                    help='ToT API URL (OpenAI-compatible chat completions). Fill in your own service endpoint.')
+                    help='ToT API URL (OpenAI-compatible chat completions). Set this manually; no default credentials are provided.')
 parser.add_argument('--mmqs_tot_api_model', type=str,
                     default='',
-                    help='ToT API model name. Fill in your own deployed/available model identifier.')
+                    help='ToT API model name. Set this manually before running.')
 parser.add_argument('--mmqs_tot_api_timeout', type=float, default=120.0,
                     help='ToT API timeout in seconds.')
 parser.add_argument('--mmqs_tot_api_max_tokens', type=int, default=512,
@@ -72,7 +72,7 @@ parser.add_argument('--mmqs_tot_api_top_p', type=float, default=0.7,
 parser.add_argument('--mmqs_tot_api_retry', type=int, default=1,
                     help='ToT API retry count on failures.')
 parser.add_argument('--mmqs_tot_api_key_env', type=str, default='',
-                    help='Environment variable name for your ToT API key. Fill in your own env var name.')
+                    help='Environment variable containing the ToT API key. Set this manually before running.')
 parser.add_argument('--mmqs_tot_q', type=int, default=5,
                     help='Paper symbol Q: candidate branch count requested from ToT API.')
 parser.add_argument('--mmqs_tot_api_reward_ema_factor', type=float, default=0.3,
@@ -82,7 +82,7 @@ parser.add_argument('--mmqs_tot_api_memory_bonus', type=float, default=0.1,
 parser.add_argument('--mmqs_tot_api_call_interval', type=int, default=3,
                     help='Resolve ToT API every N select rounds; intermediate rounds reuse cached branch.')
 parser.add_argument('--mmqs_tot_api_prune_interval', type=int, default=2,
-                    help='Run ToT prune/evolve every N feedback cycles.')
+                    help='Allow ToT prune/evolve every N MMQS selection steps.')
 parser.add_argument('--mmqs_tot_api_force_non_stream', action='store_true',
                     help='Force non-stream HTTP mode for ToT API.')
 parser.add_argument('--mmqs_quality_guard_enabled', action='store_true',

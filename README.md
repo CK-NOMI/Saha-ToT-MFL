@@ -229,6 +229,16 @@ This command requires ToTs API configuration; see Section 7.
 
 For each valid ToT candidate branch, the implementation independently selects clients, performs real local training and edge FedAvg from the same gateway base model, and evaluates the resulting branch model on the validation set. The resulting validation accuracy is the empirical reward for that branch. Proxy rewards are used only for preliminary candidate assessment and do not replace empirical branch rewards.
 
+The ToT module uses `Q=5` candidate branches. Candidate branches are regenerated every three MMQS selection steps, while prune/evolve is checked every two MMQS selection steps when branch-evaluation feedback is available. Each reasoning cycle performs one-level candidate expansion rather than recursive fixed-depth tree search. The resulting feedback and evolved seed are carried into subsequent reasoning cycles.
+
+```text
+current state
+    -> 5 parallel candidate branches
+    -> independent real training + validation
+    -> committed winner / prune feedback / next seed
+    -> next reasoning cycle
+```
+
 The final test set is evaluated only after training and is not fed back into ToT pruning, client scheduling, Dynamic Top-k, early stopping, or checkpoint selection.
 
 ### Default Hyperparameters (Main AVE Runs)
@@ -254,6 +264,7 @@ In addition:
 For ToTs-based methods (`mmqs`, `mmqs_wo_mc`), you must manually configure API settings before running.
 
 - Provide a valid API URL, model name, and API-key environment variable.
+- The ToT API endpoint, model name, and API-key environment variable must be configured manually by the user. This repository does not provide external API credentials.
 - In `run_ave_main8.py`, selecting these methods enables ToTs weighting automatically.
 - Use `run.py` with explicit API arguments:
 
@@ -363,6 +374,5 @@ Partition generation common issues:
 - **Citation**: A BibTeX entry will be added after the manuscript becomes publicly available.
 - **License**: MIT License. See the `LICENSE` file in the repository root.
 - **Contact**: open an issue in this repository or contact the corresponding authors listed in the manuscript.
-
 
 

@@ -930,14 +930,14 @@ class ClientSelection(object):
             winner_weights = np.array([1.0 / 6.0] * 6, dtype=float)
 
         pruned = ''
-        worst_score = 1e30
+        worst_acc = 1e30
         for item in evaluated:
             name = str(item.get('name', '')).strip()
             if (not name) or (name == winner):
                 continue
-            score = self._mmqs_safe_float(item.get('proxy_reward', 0.0), 0.0)
-            if score < worst_score:
-                worst_score = score
+            acc = self._mmqs_safe_float(item.get('regional_accuracy', np.nan), np.nan)
+            if np.isfinite(acc) and acc < worst_acc:
+                worst_acc = float(acc)
                 pruned = name
 
         denom = float(np.sum(np.maximum(winner_weights, 0.0)))

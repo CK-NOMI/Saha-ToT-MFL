@@ -18,16 +18,31 @@ def main():
     parser.add_argument("--config", type=str, default=str(default_config))
     parser.add_argument("--trial", type=int, default=0)
     parser.add_argument("--log_path", type=str, default=str(here / "ave_tot_api_formal_t0.log"))
-    parser.add_argument("--api_url", type=str, default="")
-    parser.add_argument("--model", type=str, default="")
-    parser.add_argument("--api_key_env", type=str, default="")
+    parser.add_argument(
+        "--api_url",
+        type=str,
+        default="",
+        help="ToT API endpoint. Set this manually before running; no default credentials are provided.",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="",
+        help="ToT API model name. Set this manually before running.",
+    )
+    parser.add_argument(
+        "--api_key_env",
+        type=str,
+        default="",
+        help="Environment variable containing the ToT API key. Set this manually before running.",
+    )
     parser.add_argument("--proxy", type=str, default="")
     parser.add_argument("--timeout", type=float, default=45.0)
     parser.add_argument("--max_tokens", type=int, default=256)
     parser.add_argument("--retry", type=int, default=0)
-    parser.add_argument("--Q", type=int, default=1)
-    parser.add_argument("--call_interval", type=int, default=1)
-    parser.add_argument("--prune_interval", type=int, default=999999)
+    parser.add_argument("--Q", type=int, default=5)
+    parser.add_argument("--call_interval", type=int, default=3)
+    parser.add_argument("--prune_interval", type=int, default=2)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top_p", type=float, default=1.0)
     args = parser.parse_args()
@@ -141,4 +156,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
